@@ -8,6 +8,7 @@ import logging
 import sys
 from volttron.platform.agent import utils
 from volttron.platform.vip.agent import Agent, Core, RPC
+from volttron.platform.messaging.health import STATUS_BAD, STATUS_GOOD
 
 _log = logging.getLogger(__name__)
 utils.setup_logging()
@@ -90,10 +91,26 @@ class Px505(Agent):
         """
         self.vip.pubsub.unsubscribe("pubsub", None, None)
 
+        self.vip.heartbeat.start_with_period(self._heartbeat_period)
+
+        self.vip.pubsub.subscribe(peer='pubsub',
+                          prefix='heartbeat',
+                          callback=handle_heartbeat)
+
         self.vip.pubsub.subscribe(peer='pubsub',
                                   prefix=topic,
                                   callback=self._handle_publish)
 
+        self.vip.health.set_status(STATUS_GOOD, "PX505::Configuration of agent successful")
+
+    def handle_heartbeat(self):
+        print("PX505::handle_heartbeat called")
+
+    @Core.periodic(1)
+    def poll_api(self):
+        print("PX505::Salut every second!")
+        self.vip.health.set_status(STATUS_GOOD, "PX505::Polling need to be implemented here")
+    
     def _handle_publish(self, peer, sender, bus, topic, headers, message):
         """
         Callback triggered by the subscription setup using the topic from the agent's config file
@@ -111,7 +128,7 @@ class Px505(Agent):
         Usually not needed if using the configuration store.
         """
         # Example publish to pubsub
-        self.vip.pubsub.publish('pubsub', "some/random/topic", message="HI!")
+        self.vip.pubsub.publish('pubsub', "some/random/topic", message="Bonjour Fahim!")
 
         # Example RPC call
         # self.vip.rpc.call("some_agent", "some_method", arg1, arg2)

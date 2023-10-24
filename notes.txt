@@ -1,0 +1,7 @@
+./start-volttron
+./stop-volttron
+tail volttron.log
+python scripts/install-agent.py -s ESISAR/ -c ESISAR/config -t PX505
+vctl start --tag PX505
+vctl stop --tag PX505
+vctl remove --tag PX505
