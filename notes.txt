@@ -5,3 +5,73 @@ python scripts/install-agent.py -s ESISAR/ -c ESISAR/config -t PX505
 vctl start --tag PX505
 vctl stop --tag PX505
 vctl remove --tag PX505
+
+
+Forward Historian
+The primary use case for the Forward Historian or Forwarder is to send data to another instance of VOLTTRON as if the data were live. The Forward Historian is located within the core directory services/core/ForwardHistorian/
+Forward Historian can be used to forward data between two ZMQ instances, two RMQ instances. When forwarder is used between two ZeroMQ instances it relies on the CurveMQ authentication mechanism used by ZMQ based VOLTTRON.
+
+Configuring Forwarder Agent
+At a minimum, a forward historian’s configuration should contain enough details to connect to and authenticate the remote destination. For this it needs
+-the destination’s VIP address (destination-vip)
+-the public key of the destination server (destination-serverkey)
+Provide the needed information in the configuration file. For example
+{
+    "destination-vip": "tcp://172.18.0.4:22916"                                      // In our case it is 10.0.0.x
+    "destination-serverkey": "add key"
+}
+The destination server key can be found by running the following command on the destination volttron instance:
+vctl auth serverkey
+
+Installation
+Once we have our configuration file ready we can install the forwarder agent using the command:
+vctl install --agent-config <path to config file> services/core/ForwardHistorian
+But before we start the agent we should configure the destination volttron instance to accept the connection from the forwarder.
+
+Configuring destination volttron instance
+When a forwarder tries to connect to a destination volttron instance, the destination instance will check the ip address of the source and public key of connecting agent against its list of accepted peers.
+vctl auth add --address <address of source instance where forwarder is installed> --credentials <publickey of installed forwarder agent>
+You can get the forwarder agent’s public key by running the following command on the source instance
+vctl auth publickey <agent uuid or name>
+
+Testing with custom topic
+1. Configure Forward historian to forward the topic heartbeat by adding the following to the forward historian’s configuration
+"custom_topic_list": ["heartbeat"],
+2. If there are no other agent in the source volttron instance, install a listener agent that periodically publishes to the topic ‘heartbeat’
+vctl install examples/ListenerAgent
+3. On the destination instance install a listener agent and tail the volttron log file. You should be able to see the listener or any other source agent’s heartbeat message on the destination volttron’s log file
+
+Multi-Platform Between Routers
+Multi-Platform between routers alleviates the need for an agent in one platform to connect to another platform directly in order for it to send/receive messages from the other platform. Modify the subscribe annotate method parameters in the listener agent (examples/ListenerAgent/listener/agent.py in the VOLTTRON root directory) to include all_platforms=True parameter to receive messages from external platforms.
+@PubSub.subscribe('pubsub', '')
+to
+@PubSub.subscribe('pubsub', 'devices', all_platforms=True)
+or add below line in the onstart method
+self.vip.pubsub.subscribe('pubsub', 'devices', self.on_match, all_platforms=True)
+
+Activate the VOLTTRON environment and export the VOLTTRON_HOME variable.
+export VOLTTRON_HOME=~/.volttron1
+
+Multi-Platform Configuration
+For each instance, specify the instance name in platform config file under it’s VOLTTRON_HOME directory.
+Path of the config: $VOLTTRON_HOME/config
+[volttron]
+vip-address = tcp://127.0.0.1:22916                                      // In our case it is 10.0.0.x
+instance-name = "platform1"
+Next, each instance needs to know the VIP address, platform name and server keys of the remote platforms that it is connecting to. In addition, each platform has to authenticate or accept the connecting instances’ public keys. 
+
+Setup Configuration and Authentication Manually
+If you do not need web servers in your setup, then you will need to build the platform discovery config file manually. The config file should contain an entry containing VIP address, instance name and serverkey of each remote platform connection.
+Name of the file: external_platform_discovery.json
+Directory path: Each platform’s VOLTTRON_HOME directory.
+For example, since VOLTTRON instance 1 is connecting to VOLTTRON instance 2 and 3, contents of external_platform_discovery.json will be
+{
+    "platform2": {"vip-address":"tcp://127.0.0.2:22916",                                      // In our case it is 10.0.0.x
+                  "instance-name":"platform2",
+                  "serverkey":"add key"},
+    "platform3": {"vip-address":"tcp://127.0.0.3:22916",                                      // In our case it is 10.0.0.x
+                  "instance-name":"platform3",
+                  "serverkey":"add key"}
+}
+After this, you will need to add the server keys of the connecting platforms using the vctl utility. Type vctl auth add command on the command prompt and simply hit Enter to select defaults on all fields except credentials. Here, we can either add serverkey of connecting platform or type /.*/ to allow ALL connections. Once the initial configuration are setup, you can start all the VOLTTRON instances in normal mode.
+$ ./start-volttron
