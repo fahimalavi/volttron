@@ -1,4 +1,4 @@
-# Receiver-Sender Agent on Raspberry B
+# Sender-Receiver Agent on Raspberry A
 
 import datetime
 import logging
@@ -6,16 +6,16 @@ from volttron.platform.vip.agent import Agent, Core, PubSub
 from volttron.platform.messaging.health import STATUS_GOOD, STATUS_BAD
 from volttron.platform.agent import utils
 
+DEFAULT_MESSAGE = 'Listener Message'
+DEFAULT_AGENTID = "listener"
+DEFAULT_HEARTBEAT_PERIOD = 5
+
 utils.setup_logging()
 _log = logging.getLogger(__name__)
 
 __version__ = '0.1'
 
-DEFAULT_MESSAGE = 'Listener Message'
-DEFAULT_AGENTID = "listener"
-DEFAULT_HEARTBEAT_PERIOD = 5
-
-class ReceiverRenvertoirAgent(Agent):
+class SenderAgent(Agent):
     def __init__(self, config_path, **kwargs):
         super().__init__(**kwargs)
         self.config = utils.load_config(config_path)
@@ -47,23 +47,24 @@ class ReceiverRenvertoirAgent(Agent):
         else:
             self._logfn = _log.info
 
-    @PubSub.subscribe('pubsub', "devices")
-    def on_receive_data(self, peer, sender, bus, topic, headers, message):
-        # Callback to handle received data from Raspberry A
-        print(f"Received data on Raspberry B: {message}")
+    @Core.receiver('onstart')
+    def onstart(self, sender, **kwargs):
+        # Logic to send data to Raspberry B
+        data_to_send = "Hello from Raspberry A!"
+        self.vip.pubsub.publish('pubsub', "devices", message=data_to_send)
+        self.vip.health.set_status(STATUS_GOOD, "Sender agent is runnig good on raspb A")
 
-        # Logic to process the received data
-
-        # Logic to send the data back to Raspberry A
-        data_to_send_back = "Hello from Raspberry B!"
-        self.vip.pubsub.publish('pubsub', "analysis", message=data_to_send_back)
-        self.vip.health.set_status(STATUS_GOOD, "ReceiverSender agent is runnig good on raspb B")
+    #@Core.receiver('on_receive')
+    @PubSub.subscribe('pubsub', "analysis")
+    def on_receive(self, peer, sender, bus, topic, headers, message):
+        # Callback to handle received data from Raspberry B
+        print(f"Received data on Raspberry A: {message}")
+        self.vip.health.set_status(STATUS_GOOD, "Receiver agent is runnig good on raspb A")
 
 # Entry point for the script
 def main():
-    #receiver_renvertoir_agent = ReceiverRenvertoirAgent(address="tcp://127.0.0.1:22917")
     try:
-        utils.vip_main(ReceiverRenvertoirAgent, version=__version__)
+        utils.vip_main(SenderAgent, version=__version__)
     except Exception as e:
         print(e)
         _log.exception('unhandled exception')
