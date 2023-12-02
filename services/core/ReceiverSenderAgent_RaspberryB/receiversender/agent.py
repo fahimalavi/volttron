@@ -2,6 +2,8 @@
 
 import datetime
 import logging
+
+import gevent
 from volttron.platform.keystore import KnownHostsStore
 from volttron.platform.vip.agent import Agent, Core, PubSub
 from volttron.platform.messaging.health import STATUS_GOOD, STATUS_BAD
@@ -19,20 +21,70 @@ DEFAULT_HEARTBEAT_PERIOD = 5
 class ReceiverRenvertoirAgent(Agent):
     def __init__(self, config_path, **kwargs):
         super().__init__(**kwargs)
-        self.config = utils.load_config(config_path)
-        self._agent_id = self.config.get('agentid', DEFAULT_AGENTID)
-        self._message = self.config.get('message', DEFAULT_MESSAGE)
-        self._heartbeat_period = self.config.get('heartbeat_period',
-                                                 DEFAULT_HEARTBEAT_PERIOD)
+        config = utils.load_config(config_path)
+        self._agent_id = config.get('agentid', DEFAULT_AGENTID)
+        self._message = config.get('message', DEFAULT_MESSAGE)
+        self._heartbeat_period = config.get('heartbeat_period',
+                                            DEFAULT_HEARTBEAT_PERIOD)
+        
+        # This part of config is not working and casue some errors
+        #---------------------------------------------------------
+        destination_serverkey = None
+        # Juste pour tester, le try catch sera supprimé par la suite
+        try:
+            destination_vip = config.pop('destination-vip')
+            _log.error("destination VIP is : ({})".format(destination_vip))
+        except KeyError:
+            destination_vip = None
+            _log.error('destination address is uninitialized ZEUBI')
 
         try:
-            self.destination_address = self.config.pop('destination-address')
+            destination_address = config.pop('destination-address')
         except KeyError:
-            self.destination_address = None
+            destination_address = None
 
-        self.destination_vip = self.config.pop('destination-vip', None)
+        if destination_vip:
+            hosts = KnownHostsStore()
+            destination_serverkey = hosts.serverkey(destination_vip)
+            _log.error("ON PASSE ICI YOLO")
+        if destination_serverkey is None:
+            _log.error("Destination serverkey not found in known hosts file, using config")
+            destination_serverkey = config.pop('destination-serverkey')
+        else:
+            config.pop('destination-serverkey', None)
+            # JUST TO TEST
+            #---------------
+            try:
+                destination_serverkey = config.pop('destination-serverkey')
+            except KeyError:
+                destination_serverkey = None
+                _log.error("Destination serverkey as been set to None TACOS")
+            #--------------
+        try:
+            if destination_address:
+                address = destination_address
+            elif destination_vip:
+                address = destination_vip
+
+            value = self.core.connect_remote_platform(address, serverkey=destination_serverkey)
+        except gevent.Timeout:
+            _log.error("Couldn't connect to address. gevent timeout: ({})".format(address))
+            self.vip.health.set_status(STATUS_BAD, "Timeout in setup of agent")
+        except Exception as ex:
+            _log.error(ex.args)
+            self.vip.health.set_status(STATUS_BAD, "Error message: {}".format(ex))
+        else:
+            if isinstance(value, Agent):
+                self._target_platform = value
+
+                self.vip.health.set_status(
+                    STATUS_GOOD, "Connected to address ({})".format(address))
+            else:
+                _log.error("Couldn't connect to address. Got Return value that is not Agent: ({})".format(address))
+                self.vip.health.set_status(STATUS_BAD, "Invalid agent detected.")
+        #---------------------------------------------------------   
         
-        runtime_limit = int(self.config.get('runtime_limit', 0))
+        runtime_limit = int(config.get('runtime_limit', 0))
         if runtime_limit and runtime_limit > 0:
             stop_time = datetime.datetime.now() + datetime.timedelta(seconds=runtime_limit)
             _log.info('Listener agent will stop at {}'.format(stop_time))
@@ -45,7 +97,7 @@ class ReceiverRenvertoirAgent(Agent):
         except:
             _log.warning('Invalid heartbeat period specified setting to default')
             self._heartbeat_period = DEFAULT_HEARTBEAT_PERIOD
-        log_level = self.config.get('log-level', 'INFO')
+        log_level = config.get('log-level', 'INFO')
         if log_level == 'ERROR':
             self._logfn = _log.error
         elif log_level == 'WARN':
@@ -54,27 +106,6 @@ class ReceiverRenvertoirAgent(Agent):
             self._logfn = _log.debug
         else:
             self._logfn = _log.info
-        
-        #Need to be tested on raspberry 
-        #------------------------------------------
-        if self.destination_address:
-                address = self.destination_address
-        elif self.destination_vip:
-                address = self.destination_vip
-
-        if self.destination_vip:
-            hosts = KnownHostsStore()
-            self.destination_serverkey = hosts.serverkey(self.destination_vip)
-            if self.destination_serverkey is None:
-                _log.info("Destination serverkey not found in known hosts file, using config")
-                self.destination_serverkey = self.config.pop('destination-serverkey')
-            else:
-                self.config.pop('destination-serverkey', None)
-
-            destination_messagebus = 'zmq'
-
-        value = self.core.connect_remote_platform(address, serverkey=self.destination_serverkey)
-        #--------------------------------------------
 
     @PubSub.subscribe('pubsub', "devices")
     def on_receive_data(self, peer, sender, bus, topic, headers, message):

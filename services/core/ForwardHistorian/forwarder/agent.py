@@ -63,15 +63,23 @@ __version__ = '5.1'
 
 def historian(config_path, **kwargs):
     config = utils.load_config(config_path)
+    _log.error("config path is: ({})".format(config_path))
     custom_topic_list = config.pop('custom_topic_list', [])
     topic_replace_list = config.pop('topic_replace_list', [])
-    destination_vip = config.pop('destination-vip', None)
+    #destination_vip = config.pop('destination-vip', None)
+    # Juste pour tester, le try catch sera supprimé par la suite
+    try:
+        destination_vip = config.pop('destination-vip')
+    except KeyError:
+        destination_vip = None
+        _log.error('destination address is uninitialized ZEUBI')
     service_topic_list = config.pop('service_topic_list', None)
     destination_serverkey = None
     try:
         destination_address = config.pop('destination-address')
     except KeyError:
         destination_address = None
+        _log.error("pas trouvé FDP")
     if service_topic_list is not None:
         w = "Deprecated service_topic_list.  Use capture_device_data " \
             "capture_log_data, capture_analysis_data or capture_record_data " \
@@ -88,7 +96,7 @@ def historian(config_path, **kwargs):
         hosts = KnownHostsStore()
         destination_serverkey = hosts.serverkey(destination_vip)
         if destination_serverkey is None:
-            _log.info("Destination serverkey not found in known hosts file, using config")
+            _log.error("Destination serverkey not found in known hosts file, using config")
             destination_serverkey = config.pop('destination-serverkey')
         else:
             config.pop('destination-serverkey', None)
