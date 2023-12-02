@@ -46,20 +46,13 @@ class ReceiverRenvertoirAgent(Agent):
         if destination_vip:
             hosts = KnownHostsStore()
             destination_serverkey = hosts.serverkey(destination_vip)
-            _log.error("ON PASSE ICI YOLO")
+            _log.error("destination serverkey is : ({})".format(destination_serverkey))
         if destination_serverkey is None:
             _log.error("Destination serverkey not found in known hosts file, using config")
             destination_serverkey = config.pop('destination-serverkey')
+            _log.error("destination serverkey is : ({})".format(destination_serverkey))
         else:
             config.pop('destination-serverkey', None)
-            # JUST TO TEST
-            #---------------
-            try:
-                destination_serverkey = config.pop('destination-serverkey')
-            except KeyError:
-                destination_serverkey = None
-                _log.error("Destination serverkey as been set to None TACOS")
-            #--------------
         try:
             if destination_address:
                 address = destination_address
