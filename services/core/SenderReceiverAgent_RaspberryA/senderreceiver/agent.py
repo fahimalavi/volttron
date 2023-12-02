@@ -3,6 +3,7 @@
 import datetime
 import logging
 from volttron.platform.vip.agent import Agent, Core, PubSub
+from volttron.platform.keystore import KnownHostsStore
 from volttron.platform.messaging.health import STATUS_GOOD, STATUS_BAD
 from volttron.platform.agent import utils
 
@@ -23,6 +24,12 @@ class SenderAgent(Agent):
         self._message = self.config.get('message', DEFAULT_MESSAGE)
         self._heartbeat_period = self.config.get('heartbeat_period',
                                                  DEFAULT_HEARTBEAT_PERIOD)
+        try:
+            self.destination_address = self.config.pop('destination-address')
+        except KeyError:
+            self.destination_address = None
+
+        self.destination_vip = self.config.pop('destination-vip', None)
         
         runtime_limit = int(self.config.get('runtime_limit', 0))
         if runtime_limit and runtime_limit > 0:
@@ -46,6 +53,27 @@ class SenderAgent(Agent):
             self._logfn = _log.debug
         else:
             self._logfn = _log.info
+
+        if self.destination_address:
+                address = self.destination_address
+        elif self.destination_vip:
+                address = self.destination_vip
+
+        #Need to be tested on raspberry 
+        #-------------------------------------
+        if self.destination_vip:
+            hosts = KnownHostsStore()
+            self.destination_serverkey = hosts.serverkey(self.destination_vip)
+            if self.destination_serverkey is None:
+                _log.info("Destination serverkey not found in known hosts file, using config")
+                self.destination_serverkey = self.config.pop('destination-serverkey')
+            else:
+                self.config.pop('destination-serverkey', None)
+
+            destination_messagebus = 'zmq'
+
+        value = self.core.connect_remote_platform(address, serverkey=self.destination_serverkey)
+        #-------------------------------------
 
     @Core.receiver('onstart')
     def onstart(self, sender, **kwargs):
