@@ -100,16 +100,16 @@ class ReceiverRenvertoirAgent(Agent):
         else:
             self._logfn = _log.info
 
-    @PubSub.subscribe('pubsub', "devices")
+    @PubSub.subscribe('pubsub', "devices", all_platforms=True)
     def on_receive_data(self, peer, sender, bus, topic, headers, message):
         # Callback to handle received data from Raspberry A
         print(f"Received data on Raspberry B: {message}")
-
+        _log.error("Data received are : ({})".format(message))
         # Logic to process the received data
 
         # Logic to send the data back to Raspberry A
-        data_to_send_back = "Hello from Raspberry B!"
-        self.vip.pubsub.publish('pubsub', "analysis", message=data_to_send_back)
+        #data_to_send_back = "Hello from Raspberry B!"
+        self.vip.pubsub.publish('pubsub', "analysis", message=message)
         self.vip.health.set_status(STATUS_GOOD, "ReceiverSender agent is runnig good on raspb B")
 
 # Entry point for the script
