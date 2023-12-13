@@ -26,7 +26,7 @@ Integration hub for connecting a diverse set of devices together in a common int
 
 Testbed for developing applications for a simulated environment
 
-![](image/volttron_diagram.png)
+![Volttron platform](https://github.com/fahimalavi/volttron/blob/PX505/volttron_diagram.png?raw=true)
 
 ### Key features 
 A message bus allowing connectivity between agents on individual platforms and between platform instances in large scale deployments
